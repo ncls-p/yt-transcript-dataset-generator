@@ -1,0 +1,42 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Build artifacts
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Linux swap files
+*.swp
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/
+.vscode-test/
+
+# JetBrains IDEs
+.idea/
+
+# Data and outputs
+dataset/
+*.log
+*.tmp
+
+# Misc
+*.bak
+*.orig

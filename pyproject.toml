@@ -1,0 +1,13 @@
+[project]
+name = "mp3-transcript-yt"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "moviepy>=2.2.1",
+    "pytest>=8.4.1",
+    "tqdm>=4.67.1",
+    "youtube-transcript-api>=1.2.1",
+    "yt-dlp>=2025.7.21",
+]
