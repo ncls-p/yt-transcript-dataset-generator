@@ -28,7 +28,13 @@ def write_dataset_csv(
         "transcript",
     ]
     with open(dataset_csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(
+            f,
+            fieldnames=fieldnames,
+            quoting=csv.QUOTE_ALL,
+            escapechar="\\",
+            doublequote=True,
+        )
         writer.writeheader()
         for row in dataset_rows:
             writer.writerow(row)
