@@ -26,6 +26,7 @@ def write_dataset_csv(
         "transcript_path",
         "transcript_exists",
         "transcript",
+        "qa_pairs",
     ]
     with open(dataset_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(

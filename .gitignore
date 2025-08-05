@@ -40,3 +40,6 @@ dataset/
 # Misc
 *.bak
 *.orig
+
+# Environment variables
+.env

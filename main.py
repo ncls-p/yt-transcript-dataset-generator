@@ -4,13 +4,16 @@ This script coordinates downloading videos, converting to MP3, fetching transcri
 """
 
 import csv
+import json
 import os
 from typing import Optional
+
 from tqdm import tqdm
 
 from src.converter import mp4_to_mp3
 from src.dataset import write_dataset_csv
 from src.downloader import download_video, get_video_id
+from src.qa import generate_qa_pairs, sanitize_transcript
 from src.transcript import get_video_transcript
 
 
@@ -101,6 +104,34 @@ def process_videos_from_csv(
                     except Exception as e:
                         print(f"Error saving transcript for {video_id}: {e}")
 
+            if transcript:
+                transcript = sanitize_transcript(transcript)
+
+            def is_qa_pairs_valid(qa_pairs_str):
+                try:
+                    qa_pairs = json.loads(qa_pairs_str)
+                    return (
+                        isinstance(qa_pairs, list)
+                        and len(qa_pairs) > 0
+                        and all(
+                            isinstance(q, dict) and "question" in q and "answer" in q
+                            for q in qa_pairs
+                        )
+                    )
+                except Exception:
+                    return False
+
+            qa_pairs_str = row.get("qa_pairs", "")
+            needs_qa = not is_qa_pairs_valid(qa_pairs_str)
+            qa_pairs = []
+            if not needs_qa:
+                try:
+                    qa_pairs = json.loads(qa_pairs_str)
+                except Exception:
+                    qa_pairs = []
+            elif transcript and transcript_exists:
+                qa_pairs = generate_qa_pairs(transcript, num_pairs=5)
+
             dataset_rows.append(
                 {
                     "url": url,
@@ -111,6 +142,7 @@ def process_videos_from_csv(
                     "transcript_path": transcript_path if transcript_exists else "",
                     "transcript_exists": transcript_exists,
                     "transcript": transcript if transcript_exists else "",
+                    "qa_pairs": json.dumps(qa_pairs, ensure_ascii=False),
                 }
             )
 
