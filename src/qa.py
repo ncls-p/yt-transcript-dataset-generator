@@ -2,27 +2,18 @@
 
 import json
 import os
+import re
 from typing import Dict, List
 
-import requests
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 
 
-def sanitize_transcript(text: str) -> str:
-    """
-    Remove line breaks and excessive whitespace from transcript text.
-    """
-    if not text:
-        return ""
-    return " ".join(text.split())
-
-
 def generate_qa_pairs(transcript: str, num_pairs: int = 5) -> List[Dict[str, str]]:
     """
-    Generate question-answer pairs for a transcript using an OpenAI-compatible API.
-    Reads model, API key, and API URL from environment variables.
+    Generate question-answer pairs for a transcript using the OpenAI Python client.
     Returns a list of dicts: [{"question": ..., "answer": ...}, ...]
     """
     api_url = os.getenv("OPENAI_API_URL", "http://api.openai.com/v1/chat/completions")
@@ -31,47 +22,60 @@ def generate_qa_pairs(transcript: str, num_pairs: int = 5) -> List[Dict[str, str
     if not api_key:
         print("Warning: OPENAI_API_KEY not set. Skipping Q&A generation.")
         return []
+
     prompt = (
         f"Given the following transcript, generate {num_pairs} question-answer pairs that test comprehension. "
         "Return them as a JSON list of objects with 'question' and 'answer' fields.\nTranscript:\n"
         f"{transcript}"
     )
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    data = {
-        "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant that creates quiz questions.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.7,
-    }
+
+    client = OpenAI(
+        api_key=api_key, base_url=api_url.replace("/v1/chat/completions", "")
+    )
+
     try:
-        response = requests.post(api_url, headers=headers, json=data, timeout=60)
-        response.raise_for_status()
-        result = response.json()
-        content = result["choices"][0]["message"]["content"]
-        # Try to parse the JSON from the model's response
+        from openai.types.chat import (
+            ChatCompletionSystemMessageParam,
+            ChatCompletionUserMessageParam,
+        )
+
+        messages = [
+            ChatCompletionSystemMessageParam(
+                role="system",
+                content="You are a helpful assistant that creates quiz questions.",
+            ),
+            ChatCompletionUserMessageParam(role="user", content=prompt),
+        ]
+        completion = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=1024,
+            temperature=0.7,
+        )
+        content = completion.choices[0].message.content
+        if not content:
+            print("No content returned from model.")
+            return []
         try:
             qa_pairs = json.loads(content)
             if isinstance(qa_pairs, list):
+                for q in qa_pairs:
+                    if not (isinstance(q, dict) and "question" in q and "answer" in q):
+                        raise ValueError("Malformed Q&A object")
                 return qa_pairs
         except Exception:
             pass
-        # Fallback: try to extract JSON from text
-        import re
 
-        match = re.search(r"\[.*\]", content, re.DOTALL)
+        match = re.search(r"\[.*\]", content, re.DOTALL) if content else None
         if match:
             try:
                 qa_pairs = json.loads(match.group(0))
                 if isinstance(qa_pairs, list):
+                    for q in qa_pairs:
+                        if not (
+                            isinstance(q, dict) and "question" in q and "answer" in q
+                        ):
+                            raise ValueError("Malformed Q&A object")
                     return qa_pairs
             except Exception:
                 pass

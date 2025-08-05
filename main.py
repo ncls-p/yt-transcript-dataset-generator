@@ -1,20 +1,28 @@
 """
 Main orchestrator for the YouTube video processing pipeline.
-This script coordinates downloading videos, converting to MP3, fetching transcripts, and writing the dataset CSV.
+Coordinates downloading videos, converting to MP3, fetching transcripts, and writing the dataset CSV.
+Follows Clean Code and Clean Architecture principles.
 """
 
 import csv
 import json
 import os
-from typing import Optional
+from typing import Any, Dict, List
 
 from tqdm import tqdm
 
 from src.converter import mp4_to_mp3
 from src.dataset import write_dataset_csv
 from src.downloader import download_video, get_video_id
-from src.qa import generate_qa_pairs, sanitize_transcript
+from src.qa import generate_qa_pairs
+from src.utils import sanitize_transcript
 from src.transcript import get_video_transcript
+
+DATASET_CSV_PATH = "dataset/dataset.csv"
+VIDEOS_CSV_PATH = "videos.csv"
+OUTPUT_MP4_DIR = "dataset/output_mp4"
+OUTPUT_MP3_DIR = "dataset/output_mp3"
+OUTPUT_TRANSCRIPTS_DIR = "dataset/output_transcripts"
 
 
 def process_videos_from_csv(
@@ -25,33 +33,40 @@ def process_videos_from_csv(
     dataset_csv_path: str,
 ) -> str:
     """
-    Process a CSV file of YouTube URLs: download videos, convert to MP3, fetch transcripts, and write dataset CSV.
+    Process YouTube videos listed in a CSV file:
+    - Download videos
+    - Convert to MP3
+    - Fetch and sanitize transcripts
+    - Generate Q&A pairs
+    - Write results to a dataset CSV
+
     Args:
-        csv_path: Path to the input CSV file with YouTube URLs.
-        video_output_dir: Directory to store downloaded MP4 files.
-        audio_output_dir: Directory to store converted MP3 files.
-        transcript_output_dir: Directory to store transcript text files.
-        dataset_csv_path: Path to the output dataset CSV file.
+        csv_path: Path to input CSV with YouTube URLs.
+        video_output_dir: Directory to save downloaded MP4s.
+        audio_output_dir: Directory to save converted MP3s.
+        transcript_output_dir: Directory to save transcripts.
+        dataset_csv_path: Path to output dataset CSV.
     Returns:
-        The path to the written dataset CSV file.
+        Path to the generated dataset CSV.
     """
+    dataset_rows: List[Dict[str, Any]] = []
     os.makedirs(video_output_dir, exist_ok=True)
     os.makedirs(audio_output_dir, exist_ok=True)
     os.makedirs(transcript_output_dir, exist_ok=True)
-    dataset_rows = []
+
     with open(csv_path, newline="", encoding="utf-8") as csvfile:
         reader = list(csv.DictReader(csvfile))
         for row in tqdm(reader, desc="Processing videos", unit="video"):
-            url = row.get("url")
+            url = row.get("url", "").strip()
             if not url:
                 continue
-            video_id: Optional[str] = get_video_id(url)
-            title: Optional[str] = None
-            mp4_path: Optional[str] = None
-            mp3_path: Optional[str] = None
-            transcript_path: Optional[str] = None
-            transcript: Optional[str] = None
-            transcript_exists: bool = False
+            video_id = get_video_id(url)
+            title = None
+            mp4_path = None
+            mp3_path = None
+            transcript_path = None
+            transcript = None
+            transcript_exists = False
 
             if video_id:
                 possible_mp4s = [
@@ -107,7 +122,7 @@ def process_videos_from_csv(
             if transcript:
                 transcript = sanitize_transcript(transcript)
 
-            def is_qa_pairs_valid(qa_pairs_str):
+            def is_qa_pairs_valid(qa_pairs_str: str) -> bool:
                 try:
                     qa_pairs = json.loads(qa_pairs_str)
                     return (
@@ -149,14 +164,18 @@ def process_videos_from_csv(
     return write_dataset_csv(dataset_rows, dataset_csv_path)
 
 
-if __name__ == "__main__":
-    dataset_csv_path = "dataset/dataset.csv"
-    os.makedirs(os.path.dirname(dataset_csv_path), exist_ok=True)
+def main() -> None:
+    """Entry point for the YouTube video processing pipeline."""
+    os.makedirs(os.path.dirname(DATASET_CSV_PATH), exist_ok=True)
     result_csv_path = process_videos_from_csv(
-        csv_path="videos.csv",
-        video_output_dir="dataset/output_mp4",
-        audio_output_dir="dataset/output_mp3",
-        transcript_output_dir="dataset/output_transcripts",
-        dataset_csv_path=dataset_csv_path,
+        csv_path=VIDEOS_CSV_PATH,
+        video_output_dir=OUTPUT_MP4_DIR,
+        audio_output_dir=OUTPUT_MP3_DIR,
+        transcript_output_dir=OUTPUT_TRANSCRIPTS_DIR,
+        dataset_csv_path=DATASET_CSV_PATH,
     )
     print(f"Dataset CSV generated at: {result_csv_path}")
+
+
+if __name__ == "__main__":
+    main()
